@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "builds": [
     {
       "src": "api/generate-poem.js",
@@ -12,8 +11,9 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/generate-poem.js"
+      "src": "/api/generate-poem",
+      "dest": "/api/generate-poem.js",
+      "methods": ["POST"]
     },
     {
       "src": "/(.*)",
