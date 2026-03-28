@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/generate-poem.js": {
+      "runtime": "nodejs18.x"
+    }
+  }
+}

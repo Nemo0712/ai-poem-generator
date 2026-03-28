@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 多模态诗社</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#6366f1',
+                        accent: '#8b5cf6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                },
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .drop-area-active {
+                @apply border-primary bg-blue-50;
+            }
+            .loading-spinner {
+                border-top-color: #3b82f6;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题 -->
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">AI 多模态诗社</h1>
+            <p class="text-gray-600">上传图片，让 AI 为你创作一首诗</p>
+        </header>
+
+        <!-- 主要内容 -->
+        <main class="max-w-4xl mx-auto">
+            <!-- 图片上传区域 -->
+            <section class="mb-8">
+                <div id="drop-area" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-colors duration-300">
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                    <div class="flex flex-col items-center">
+                        <i class="fa fa-cloud-upload text-5xl text-gray-400 mb-4"></i>
+                        <p class="text-gray-600 mb-2">拖拽图片到此处或</p>
+                        <button id="upload-btn" class="bg-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300">
+                            点击上传
+                        </button>
+                        <p class="text-xs text-gray-500 mt-4">支持 JPG、PNG、WEBP 格式</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 图片预览 -->
+            <section id="preview-section" class="mb-8 hidden">
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-4">图片预览</h2>
+                    <div class="flex justify-center">
+                        <img id="preview-image" src="" alt="预览图片" class="max-w-full max-h-96 object-contain rounded">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 生成按钮 -->
+            <section class="mb-8 text-center">
+                <button id="generate-btn" class="bg-secondary hover:bg-indigo-600 text-white font-medium py-3 px-8 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
+                    <span id="generate-text">生成诗歌</span>
+                    <div id="loading-spinner" class="hidden loading-spinner w-5 h-5 border-2 border-gray-200 rounded-full ml-3"></div>
+                </button>
+            </section>
+
+            <!-- 结果展示区 -->
+            <section id="result-section" class="mb-8 hidden">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">AI 生成的诗歌</h2>
+                        <button id="read-btn" class="bg-accent hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300 flex items-center">
+                            <i class="fa fa-volume-up mr-2"></i> 朗读
+                        </button>
+                    </div>
+                    <div id="poem-result" class="text-gray-700 leading-relaxed whitespace-pre-line"></div>
+                </div>
+            </section>
+
+            <!-- 错误提示 -->
+            <section id="error-section" class="mb-8 hidden">
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fa fa-exclamation-circle text-red-500 mr-3"></i>
+                        <p id="error-message" class="text-red-700"></p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 页脚 -->
+        <footer class="mt-16 text-center text-gray-500 text-sm">
+            <p>© 2026 AI 多模态诗社 | 用 AI 点亮创意</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM 元素
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const previewSection = document.getElementById('preview-section');
+        const previewImage = document.getElementById('preview-image');
+        const generateBtn = document.getElementById('generate-btn');
+        const generateText = document.getElementById('generate-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const resultSection = document.getElementById('result-section');
+        const poemResult = document.getElementById('poem-result');
+        const readBtn = document.getElementById('read-btn');
+        const errorSection = document.getElementById('error-section');
+        const errorMessage = document.getElementById('error-message');
+
+        // 全局变量
+        let uploadedFile = null;
+
+        // 拖拽事件处理
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('drop-area-active');
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('drop-area-active');
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) {
+                handleFiles(files);
+            }
+        }
+
+        // 点击上传
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function() {
+            if (this.files.length) {
+                handleFiles(this.files);
+            }
+        });
+
+        // 处理文件
+        function handleFiles(files) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+                uploadedFile = file;
+                showPreview(file);
+                hideError();
+            } else {
+                showError('请上传图片文件');
+            }
+        }
+
+        // 显示预览
+        function showPreview(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                previewSection.classList.remove('hidden');
+                generateBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 将图片转换为base64
+        function imageToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64String = e.target.result.split(',')[1];
+                    resolve(base64String);
+                };
+                reader.onerror = function(error) {
+                    reject(error);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 使用豆包API分析图片
+        async function analyzeImage(file) {
+            try {
+                // 将图片转换为base64
+                const base64Image = await imageToBase64(file);
+                
+                // 构建API请求
+                const response = await fetch(DOUBAO_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${DOUBAO_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'ep-20260328145254-6svwm',
+                        messages: [
+                            {
+                                role: 'user',
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: '请分析这张图片的内容，描述图片中的主要元素，并提取5个关键词。格式要求：先输出描述，然后换行输出关键词，用逗号分隔。'
+                                    },
+                                    {
+                                        type: 'image_url',
+                                        image_url: {
+                                            url: `data:image/jpeg;base64,${base64Image}`
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        temperature: 0.7
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                
+                // 解析API返回的内容
+                const lines = content.split('\n');
+                const description = lines[0];
+                const keywordsLine = lines[1];
+                const keywords = keywordsLine.split(',').map(keyword => keyword.trim());
+                
+                return {
+                    description,
+                    keywords
+                };
+            } catch (error) {
+                console.error('图片分析失败:', error);
+                // 失败时返回默认分析结果
+                return {
+                    description: '一张图片，内容丰富，充满故事性',
+                    keywords: ['图片', '内容', '故事', '视觉', '艺术']
+                };
+            }
+        }
+
+        // 使用后端API生成诗歌
+        async function generatePoemFromImage(file) {
+            try {
+                // 将图片转换为base64
+                const base64Image = await imageToBase64(file);
+                
+                console.log('开始调用后端API...');
+                
+                // 调用后端API
+                const response = await fetch('/api/generate-poem', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        imageBase64: base64Image
+                    })
+                });
+                
+                console.log('API响应状态:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API错误响应:', errorData);
+                    throw new Error(errorData.error || '生成诗歌失败');
+                }
+                
+                const data = await response.json();
+                console.log('生成的诗歌:', data.poem);
+                
+                return data.poem;
+            } catch (error) {
+                console.error('生成诗歌失败:', error);
+                showError(`生成诗歌失败: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // 生成诗歌
+        generateBtn.addEventListener('click', async () => {
+            if (!uploadedFile) {
+                showError('请先上传图片');
+                return;
+            }
+
+            showLoading();
+            hideError();
+
+            try {
+                // 使用豆包API生成诗歌
+                const poem = await generatePoemFromImage(uploadedFile);
+                
+                showResult(poem);
+            } catch (error) {
+                showError('生成诗歌失败，请重试');
+                console.error('Error:', error);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // 显示加载状态
+        function showLoading() {
+            generateText.textContent = '生成中...';
+            loadingSpinner.classList.remove('hidden');
+            generateBtn.disabled = true;
+        }
+
+        // 隐藏加载状态
+        function hideLoading() {
+            generateText.textContent = '生成诗歌';
+            loadingSpinner.classList.add('hidden');
+            generateBtn.disabled = false;
+        }
+
+        // 显示结果
+        function showResult(poem) {
+            poemResult.textContent = poem;
+            resultSection.classList.remove('hidden');
+        }
+
+        // 语音朗读
+        readBtn.addEventListener('click', () => {
+            const poem = poemResult.textContent;
+            if (poem) {
+                const speech = new SpeechSynthesisUtterance(poem);
+                speech.lang = 'zh-CN';
+                speechSynthesis.speak(speech);
+            }
+        });
+
+        // 显示错误
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorSection.classList.remove('hidden');
+        }
+
+        // 隐藏错误
+        function hideError() {
+            errorSection.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
