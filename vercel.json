@@ -1,7 +1,5 @@
 {
-  "functions": {
-    "api/generate-poem.js": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/generate-poem.js" }
+  ]
 }
